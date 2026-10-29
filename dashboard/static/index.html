@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CineData · Big Data Movie Analytics</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/vendor/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="logo">▶</div>
+      <div><div class="brand-name">CineData</div><div class="brand-sub">Big Data Movie Analytics</div></div>
+    </div>
+    <nav class="nav">
+      <a href="#overview" data-page="overview"><span class="ic">🏠</span>Tổng quan</a>
+      <a href="#realtime" data-page="realtime"><span class="ic">⚡</span>Realtime <span class="pill live-pill" id="navLive">LIVE</span></a>
+      <a href="#analytics" data-page="analytics"><span class="ic">📊</span>Phân tích dữ liệu</a>
+      <a href="#behavior" data-page="behavior"><span class="ic">👥</span>Hành vi người dùng</a>
+      <a href="#recommend" data-page="recommend"><span class="ic">🎯</span>Gợi ý phim</a>
+      <a href="#explore" data-page="explore"><span class="ic">🔎</span>Khám phá phim</a>
+      <a href="#system" data-page="system"><span class="ic">🛠️</span>Hệ thống</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="stack">HDFS · Kafka · Spark · Airflow</div>
+      <div class="muted small">Đồ án thực hành Big Data</div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+      <div>
+        <h1 id="pageTitle">Tổng quan</h1>
+        <div class="muted small" id="pageSub"></div>
+      </div>
+      <div class="topbar-right">
+        <div class="status-dot" id="liveDot"><span></span><b id="liveText">Đang kết nối…</b></div>
+        <div class="clock" id="clock"></div>
+      </div>
+    </header>
+
+    <!-- ===== OVERVIEW ===== -->
+    <section class="page" id="page-overview">
+      <div class="hero">
+        <div>
+          <div class="eyebrow">Pipeline dữ liệu lớn theo thời gian thực</div>
+          <h2>Theo dõi hành vi xem phim, phân tích và gợi ý phim trên một nền tảng</h2>
+          <p>Dữ liệu MovieLens lưu trên <b>HDFS</b>. Người dùng liên tục sinh sự kiện vào <b>Kafka</b>,
+             <b>Spark Streaming</b> xử lý và làm giàu dữ liệu, <b>Spark MLlib</b> huấn luyện mô hình gợi ý,
+             còn <b>Airflow</b> điều phối toàn bộ.</p>
+          <div class="hero-actions">
+            <a class="btn primary" href="#realtime">Xem realtime</a>
+            <a class="btn ghost" href="#recommend">Thử gợi ý phim</a>
+          </div>
+        </div>
+        <div class="hero-flow">
+          <div class="flow-node">📁<span>HDFS</span></div><div class="flow-arrow">→</div>
+          <div class="flow-node">📨<span>Kafka</span></div><div class="flow-arrow">→</div>
+          <div class="flow-node">⚡<span>Spark</span></div><div class="flow-arrow">→</div>
+          <div class="flow-node">🎯<span>Gợi ý</span></div>
+        </div>
+      </div>
+      <div class="kpis" id="ovKpis"></div>
+      <div class="grid g-3-2">
+        <div class="card"><div class="card-h"><h3>🔥 Đang thịnh hành</h3><span class="muted small">5 phút gần nhất</span></div>
+          <div class="trend-list" id="ovTrending"></div></div>
+        <div class="card"><div class="card-h"><h3>Lưu lượng sự kiện</h3><span class="muted small">mỗi 10 giây</span></div>
+          <div class="chart-box"><canvas id="ovTimeline"></canvas></div>
+          <div class="card-h mt"><h3>Trạng thái hệ thống</h3><a href="#system" class="small link">Chi tiết →</a></div>
+          <div class="svc-mini" id="ovServices"></div></div>
+      </div>
+    </section>
+
+    <!-- ===== REALTIME ===== -->
+    <section class="page" id="page-realtime">
+      <div class="kpis" id="rtKpis"></div>
+      <div class="notice" id="rtNotice" hidden></div>
+      <div class="grid g-2-1">
+        <div class="card"><div class="card-h"><h3>Lưu lượng sự kiện từ Kafka</h3><span class="muted small">tự làm mới mỗi 3 giây</span></div>
+          <div class="chart-box tall"><canvas id="rtTimeline"></canvas></div></div>
+        <div class="card"><div class="card-h"><h3>Loại sự kiện</h3></div>
+          <div class="chart-box tall"><canvas id="rtTypes"></canvas></div></div>
+      </div>
+      <div class="grid g-1-1">
+        <div class="card"><div class="card-h"><h3>🔥 Top 10 phim trending</h3></div><div class="table-wrap" id="rtTrending"></div></div>
+        <div class="card"><div class="card-h"><h3>Luồng sự kiện trực tiếp</h3></div><div class="feed" id="rtFeed"></div></div>
+      </div>
+      <div class="grid g-1-1">
+        <div class="card"><div class="card-h"><h3>Theo thành phố</h3></div><div class="chart-box"><canvas id="rtCities"></canvas></div></div>
+        <div class="card"><div class="card-h"><h3>Theo thiết bị</h3></div><div class="chart-box"><canvas id="rtDevices"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- ===== ANALYTICS ===== -->
+    <section class="page" id="page-analytics">
+      <div class="kpis" id="anKpis"></div>
+      <div class="notice" id="anNotice" hidden>Chưa có kết quả phân tích. Hãy chạy DAG <b>03_batch_analytics_and_ml</b> trong Airflow.</div>
+      <div class="grid g-1-1">
+        <div class="card"><div class="card-h"><h3>Lượt đánh giá theo thể loại</h3></div><div class="chart-box tall"><canvas id="anGenreCount"></canvas></div></div>
+        <div class="card"><div class="card-h"><h3>Điểm trung bình theo thể loại</h3></div><div class="chart-box tall"><canvas id="anGenreAvg"></canvas></div></div>
+      </div>
+      <div class="grid g-1-1">
+        <div class="card"><div class="card-h"><h3>Phân bố điểm đánh giá</h3></div><div class="chart-box"><canvas id="anDist"></canvas></div></div>
+        <div class="card"><div class="card-h"><h3>Điểm TB theo thập niên phát hành</h3></div><div class="chart-box"><canvas id="anDecade"></canvas></div></div>
+      </div>
+      <div class="card"><div class="card-h"><h3>Số lượt đánh giá & người dùng hoạt động theo năm</h3></div><div class="chart-box"><canvas id="anYear"></canvas></div></div>
+      <div class="card"><div class="card-h"><h3>⭐ Phim được đánh giá cao nhất</h3><span class="muted small">tối thiểu 50 lượt đánh giá</span></div><div class="poster-row" id="anTopRated"></div></div>
+      <div class="grid g-2-1">
+        <div class="card"><div class="card-h"><h3>👀 Phim được đánh giá nhiều nhất</h3></div><div class="table-wrap" id="anPopular"></div></div>
+        <div class="card"><div class="card-h"><h3>🏷️ Tag phổ biến</h3></div><div class="tags" id="anTags"></div></div>
+      </div>
+    </section>
+
+    <!-- ===== BEHAVIOR ===== -->
+    <section class="page" id="page-behavior">
+      <div class="notice" id="bhNotice" hidden>Chưa có dữ liệu streaming đã phân tích. Hãy chạy DAG <b>02</b> rồi <b>03</b>.</div>
+      <div class="kpis" id="bhKpis"></div>
+      <div class="grid g-1-1">
+        <div class="card"><div class="card-h"><h3>Phễu hành vi</h3></div><div class="funnel" id="bhFunnel"></div></div>
+        <div class="card"><div class="card-h"><h3>Tỉ lệ xem hết phim theo thể loại</h3></div><div class="chart-box tall"><canvas id="bhComplete"></canvas></div></div>
+      </div>
+      <div class="card"><div class="card-h"><h3>Sự kiện & người dùng hoạt động theo phút</h3></div><div class="chart-box"><canvas id="bhMinute"></canvas></div></div>
+      <div class="grid g-1-1">
+        <div class="card"><div class="card-h"><h3>Bản đồ nhiệt: thành phố × thiết bị</h3></div><div class="table-wrap" id="bhHeat"></div></div>
+        <div class="card"><div class="card-h"><h3>🔥 Phim trending (Spark Structured Streaming)</h3></div><div class="table-wrap" id="bhTrending"></div></div>
+      </div>
+    </section>
+
+    <!-- ===== RECOMMEND ===== -->
+    <section class="page" id="page-recommend">
+      <div class="notice" id="rcNotice" hidden>Chưa có mô hình. Hãy chạy DAG <b>03_batch_analytics_and_ml</b>.</div>
+      <div class="kpis" id="rcKpis"></div>
+      <div class="card">
+        <div class="card-h"><h3>🎯 Gợi ý phim cho người dùng</h3>
+          <div class="user-pick">
+            <label class="muted small" for="userSelect">Người dùng</label>
+            <select id="userSelect"></select>
+            <button class="btn small ghost" id="randomUser">🎲 Ngẫu nhiên</button>
+          </div>
+        </div>
+        <div class="user-head" id="userHead"></div>
+        <h4 class="sec">Top 10 phim gợi ý (ALS)</h4>
+        <div class="poster-row" id="recList"></div>
+        <h4 class="sec">Phim người dùng này đã đánh giá cao</h4>
+        <div class="poster-row small-posters" id="histList"></div>
+      </div>
+      <div class="grid g-1-1">
+        <div class="card"><div class="card-h"><h3>Grid search tham số</h3></div><div class="chart-box"><canvas id="rcGrid"></canvas></div></div>
+        <div class="card"><div class="card-h"><h3>RMSE qua các lần huấn luyện lại</h3><span class="muted small">dữ liệu được làm giàu dần</span></div><div class="chart-box"><canvas id="rcHist"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- ===== EXPLORE ===== -->
+    <section class="page" id="page-explore">
+      <div class="search-bar">
+        <span>🔎</span><input id="searchInput" placeholder="Tìm phim theo tên, ví dụ: Toy Story, Matrix, Star Wars…" autocomplete="off">
+      </div>
+      <div class="poster-grid" id="searchResults"></div>
+    </section>
+
+    <!-- ===== SYSTEM ===== -->
+    <section class="page" id="page-system">
+      <div class="svc-grid" id="svcGrid"></div>
+      <div class="card">
+        <div class="card-h"><h3>Kiến trúc hệ thống</h3></div>
+        <div class="arch">
+          <div class="arch-row">
+            <div class="arch-box gray">📄 MovieLens CSV<small>dữ liệu gốc</small></div><div class="arch-arrow">→</div>
+            <div class="arch-box orange">📁 HDFS<small>data lake</small></div><div class="arch-arrow">→<i>query</i></div>
+            <div class="arch-box blue">⚙️ Spark SQL / MLlib<small>batch</small></div><div class="arch-arrow">→</div>
+            <div class="arch-box green">📊 Phân tích · 🎯 Mô hình</div>
+          </div>
+          <div class="arch-up">↑ ghi sự kiện đã làm giàu (Parquet)</div>
+          <div class="arch-row">
+            <div class="arch-box pink">👤 Script người dùng<small>sinh dữ liệu liên tục</small></div><div class="arch-arrow">→<i>JSON</i></div>
+            <div class="arch-box yellow">📨 Kafka<small>movie-events</small></div><div class="arch-arrow">→</div>
+            <div class="arch-box blue">⚡ Spark Streaming<small>làm giàu · window 1 phút</small></div><div class="arch-arrow">→</div>
+            <div class="arch-box green">🔥 Trending realtime</div>
+          </div>
+          <div class="arch-air">🌀 Apache Airflow điều phối: DAG 01 ingest · DAG 02 streaming · DAG 03 batch + ML · DAG 00 toàn bộ</div>
+        </div>
+      </div>
+      <div class="card"><div class="card-h"><h3>Dữ liệu đầu ra hiện có</h3></div><div class="tags" id="sysTables"></div></div>
+    </section>
+
+    <footer class="foot muted small">CineData · Đồ án Big Data: HDFS · Kafka · Spark · Airflow · Dữ liệu: MovieLens (GroupLens)</footer>
+  </main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+# =====================================================================
+#  Đồ án Big Data: HDFS + Kafka + Spark (batch & streaming) + Airflow
+#  Khởi động:  docker compose up -d --build
+# =====================================================================
+name: bigdata
+
+x-spark-common: &spark-common
+  build: ./docker/spark
+  image: bigdata-spark:3.5.1
+  volumes:
+    - ./spark_jobs:/opt/spark-apps
+    - ./data:/opt/data
+    - ./output:/opt/output
+  networks: [bigdata]
+
+services:
+  # --------------------------- HDFS ---------------------------------
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: bd-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=bigdata
+    env_file: ./hadoop.env
+    ports:
+      - "9870:9870"   # Web UI HDFS
+      - "9000:9000"   # RPC
+    volumes:
+      - namenode:/hadoop/dfs/name
+      - ./data:/data
+    networks: [bigdata]
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: bd-datanode
+    hostname: datanode
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    env_file: ./hadoop.env
+    ports:
+      - "9864:9864"
+    volumes:
+      - datanode:/hadoop/dfs/data
+    depends_on: [namenode]
+    networks: [bigdata]
+
+  # --------------------------- KAFKA (KRaft, không cần Zookeeper) ---
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: bd-kafka
+    hostname: kafka
+    ports:
+      - "29092:29092"  # cho script chạy trên máy host (localhost:29092)
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka:/var/lib/kafka/data
+    networks: [bigdata]
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: bd-kafka-ui
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: bigdata
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on: [kafka]
+    networks: [bigdata]
+
+  # --------------------------- SPARK --------------------------------
+  spark-master:
+    <<: *spark-common
+    container_name: bd-spark-master
+    hostname: spark-master
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    ports:
+      - "8080:8080"   # Spark Master UI
+      - "7077:7077"
+      - "4040:4040"   # Spark application UI (driver chạy ở spark-master)
+      - "4041:4041"
+
+  spark-worker:
+    <<: *spark-common
+    container_name: bd-spark-worker
+    hostname: spark-worker
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    environment:
+      SPARK_WORKER_CORES: "4"
+      SPARK_WORKER_MEMORY: "2g"
+    ports:
+      - "8081:8081"
+    depends_on: [spark-master]
+
+  # --------------------------- AIRFLOW ------------------------------
+  postgres:
+    image: postgres:15
+    container_name: bd-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 10
+    networks: [bigdata]
+
+  airflow:
+    build: ./docker/airflow
+    image: bigdata-airflow:2.9.3
+    container_name: bd-airflow
+    hostname: airflow
+    # chạy bằng root để dùng được docker.sock (gọi spark-submit / hdfs trong các container khác)
+    user: "0:0"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+      AIRFLOW__WEBSERVER__SECRET_KEY: bigdata-secret
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: "10"
+      KAFKA_BOOTSTRAP: kafka:9092
+      PROJECT_DATA_DIR: /opt/airflow/data
+    command: >
+      bash -c "rm -f /opt/airflow/airflow-webserver*.pid /opt/airflow/airflow-scheduler*.pid &&
+               airflow db migrate &&
+               (airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true) &&
+               (airflow scheduler &) &&
+               exec airflow webserver"
+    ports:
+      - "8088:8080"   # Airflow UI (admin / admin)
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/opt/airflow/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [bigdata]
+
+  # --------------------------- DASHBOARD ----------------------------
+  dashboard:
+    build: ./dashboard
+    image: bigdata-dashboard:1.0
+    container_name: bd-dashboard
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      OUTPUT_DIR: /app/output
+      DATA_DIR: /app/data/movielens
+    ports:
+      - "8550:8501"   # Dashboard web: http://localhost:8550
+    volumes:
+      - ./output:/app/output:ro
+      - ./data:/app/data:ro
+    depends_on: [kafka]
+    networks: [bigdata]
+
+networks:
+  bigdata:
+    name: bigdata
+
+volumes:
+  namenode:
+  datanode:
+  kafka:
+  postgres:

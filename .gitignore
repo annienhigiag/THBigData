@@ -1,0 +1,6 @@
+data/movielens/
+output/*
+!output/.gitkeep
+airflow/logs/*
+!airflow/logs/.gitkeep
+__pycache__/
